@@ -2,9 +2,6 @@
 # @lint-avoid-python-3-compatibility-imports
 from __future__ import print_function
 from bcc import BPF
-import argparse
-from time import strftime
-
 
 b = BPF(src_file='./sched_out_mon.c')
 b.attach_kprobe(event='io_schedule',fn_name='io_start')

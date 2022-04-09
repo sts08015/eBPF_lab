@@ -1,5 +1,4 @@
 #include <uapi/linux/ptrace.h>
-#include <linux/fs.h>
 #include <linux/sched.h>
 #include <asm/types.h>
 
