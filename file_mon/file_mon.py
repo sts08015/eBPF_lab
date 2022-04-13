@@ -11,7 +11,12 @@ b.attach_kprobe(event='vfs_write',fn_name='write_mon')
 b.attach_kprobe(event='vfs_writev',fn_name='writev_mon')
 
 
-def print_event(cpu, data, size):
-    event = b["events"].event(data)
-    #print(event.name.decode('utf-8', 'replace'))
+TIMER = 1000
+print("Analysing...\nMAX 1000s\nCtrl-C to stop counting")
+try:
+    sleep(TIMER)
+except KeyboardInterrupt:
+    pass
+
+table = b.get_table('arr')
 
