@@ -4,13 +4,10 @@
 #include <uapi/linux/ptrace.h>
 
 struct data_t {
-    //char comm[TASK_COMM_LEN];
     char name[TASK_COMM_LEN];
     u64 read_cnt;
     u64 write_cnt;
-    //file type
-    //IO
-    //how much?
+    umode_t type;
 };
 
 BPF_ARRAY(arr,struct data_t);
@@ -22,39 +19,43 @@ static void get_name(void* buf,struct file* file, u64 size)
     bpf_probe_read_kernel_str(buf,size-1,d_name.name);
 }
 
-static void get_type(void* buf)
+static void get_type(umode_t* buf,struct file* file)
 {
-    //use struct inode
+    *buf = file->f_inode->i_mode;
 }
 
 ssize_t read_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
-    get_name(&data.path,file,TASK_COMM_LEN);
-    //get_type(&data.);
+    get_name(&data.name,file,TASK_COMM_LEN);
+    get_type(&data.type,file);
+    //look up --> inc readcnt
     return 0;
 }
 
 ssize_t readv_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
-    get_name(&data.path,file,TASK_COMM_LEN);
-    
+    get_name(&data.name,file,TASK_COMM_LEN);
+    get_type(&data.type,file);
+
     return 0;
 }
 
 ssize_t write_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
-    get_path(&data.path,file,TASK_COMM_LEN);
-    
+    get_name(&data.name,file,TASK_COMM_LEN);
+    get_type(&data.type,file);
+
     return 0;
 }
 
 ssize_t writev_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
-    get_path(&data.path,file,TASK_COMM_LEN);
-    
+    get_name(&data.name,file,TASK_COMM_LEN);
+    get_type(&data.type,file);
+
     return 0;
 }

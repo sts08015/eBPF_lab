@@ -19,4 +19,6 @@ except KeyboardInterrupt:
     pass
 
 table = b.get_table('arr')
+#shoud parse file type here.
+#https://docs.python.org/ko/3/library/stat.html
 
