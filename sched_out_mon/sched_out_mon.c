@@ -20,7 +20,7 @@ void io_start(struct pt_regs *ctx)
 
 void ret_io_sched(struct pt_regs *ctx)
 {
-    struct data_t data={};
+    struct data_t data={0};
     u64 pid = (u64)(bpf_get_current_pid_tgid() >> 32);
     
     u64* tsp = table.lookup(&pid);

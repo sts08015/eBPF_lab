@@ -15,7 +15,7 @@ BPF_HASH(table,struct data_t);
 
 vm_fault_t fault_counter(struct pt_regs *ctx,struct vm_area_struct *vma)
 {
-    struct data_t data = {};
+    struct data_t data = {0};
     
     //get name of target file
     struct file* target = vma->vm_file;
