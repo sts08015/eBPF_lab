@@ -21,11 +21,12 @@ except KeyboardInterrupt:
 
 table = b.get_table('table')
 
-print("\n%-20s %-25s %15s:%-15s %15s:%-15s" %("NAME","TYPE","READ","NUM","WRITE","NUM"))
+print("\n%-10s %-20s %-25s %15s:%-15s %15s:%-15s" %("PID","NAME","TYPE","READ","NUM","WRITE","NUM"))
 
 for i in table.items():
     key = i[0]
     val = i[1]
+    pid = key.pid
     name = key.name
     mode = key.type
     read = val.read_cnt
@@ -53,6 +54,6 @@ for i in table.items():
     else:
         mode = '?'
     
-    print("\n%-20s %-25s %15s:%-15s %15s:%-15s" %(name,mode,"READ",read,"WRITE",write))
+    print("\n%-10d %-20s %-25s %15s:%-15s %15s:%-15s" %(pid,name,mode,"READ",read,"WRITE",write))
     
 

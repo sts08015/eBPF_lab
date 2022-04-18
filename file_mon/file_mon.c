@@ -1,9 +1,12 @@
 #include <asm/types.h>
 #include <asm/unistd.h>
 #include <linux/fs.h>
+#include <linux/pid.h>
+#include <linux/types.h>
 #include <uapi/linux/ptrace.h>
 
 struct data_t {
+    u32 pid;
     char name[TASK_COMM_LEN];
     umode_t type;
 };
@@ -54,6 +57,7 @@ static void inc_write(struct data_t* data)
 ssize_t read_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
+    data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
     get_type(&data.type,file);
     inc_read(&data);
@@ -63,6 +67,7 @@ ssize_t read_mon(struct pt_regs *ctx,struct file *file)
 ssize_t readv_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
+    data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
     get_type(&data.type,file);
     inc_read(&data);
@@ -72,6 +77,7 @@ ssize_t readv_mon(struct pt_regs *ctx,struct file *file)
 ssize_t write_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
+    data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
     get_type(&data.type,file);
     inc_write(&data);
@@ -81,6 +87,7 @@ ssize_t write_mon(struct pt_regs *ctx,struct file *file)
 ssize_t writev_mon(struct pt_regs *ctx,struct file *file)
 {
     struct data_t data = {0};
+    data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
     get_type(&data.type,file);
     inc_write(&data);
