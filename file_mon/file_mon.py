@@ -52,7 +52,7 @@ for i in table.items():
     elif S_ISWHT(mode):
         mode = "whiteout"
     else:
-        mode = '?'
+        continue
     
     print("\n%-10d %-20s %-25s %15s:%-15s %15s:%-15s" %(pid,name,mode,"READ",read,"WRITE",write))
     
