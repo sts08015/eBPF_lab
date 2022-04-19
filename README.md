@@ -18,4 +18,4 @@ This program counts number of page faults occured to files in system
 ## **3. file_mon**
 This program monitors PID, IO issued file name, type of the file, Read and Write numbers
 
-![image](https://user-images.githubusercontent.com/31784008/163986130-e59ad7f4-644c-4dae-8fac-f1e41ed88c81.png)
+![image](https://user-images.githubusercontent.com/31784008/163986582-ed5357f7-0b23-4ca3-9515-74a1ff4a1eb3.png)
