@@ -59,6 +59,7 @@ ssize_t read_mon(struct pt_regs *ctx,struct file *file)
     struct data_t data = {0};
     data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
+    if(data.name[0] == 0) return -1;
     get_type(&data.type,file);
     inc_read(&data);
     return 0;
@@ -69,6 +70,7 @@ ssize_t readv_mon(struct pt_regs *ctx,struct file *file)
     struct data_t data = {0};
     data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
+    if(data.name[0] == 0) return -1;
     get_type(&data.type,file);
     inc_read(&data);
     return 0;
@@ -79,6 +81,7 @@ ssize_t write_mon(struct pt_regs *ctx,struct file *file)
     struct data_t data = {0};
     data.pid = bpf_get_current_pid_tgid();
     get_name(&data.name,file,TASK_COMM_LEN);
+    if(data.name[0] == 0) return -1;
     get_type(&data.type,file);
     inc_write(&data);
     return 0;
