@@ -20,7 +20,7 @@ BPF_HASH(table,struct data_t, struct count);
 static u8 rw(struct request* req)
 {
     struct bio* bio = req->bio;
-    u8 flag = (bio->bi_opf) >> REQ_FLAG_BITS;
+    u8 flag = (bio->bi_opf) & REQ_OP_MASK;
     return flag;
 }
 
@@ -37,14 +37,16 @@ static u8 sr(struct request* req)
 
 static void determine(struct request* req,struct count *cnt)
 {
-    if(rw(req) == REQ_OP_READ){
+    u8 chk = rw(req);
+
+    if(chk == REQ_OP_READ){
         if(sr(req)){    //random
             ++(cnt->read_rand_cnt);
         }else{          //sequential
             atomic_t tmp = req->bio->__bi_cnt;
             (cnt->read_seq_cnt)+=tmp.counter;
         }
-    }else if(rw(req) == REQ_OP_WRITE){
+    }else if(chk == REQ_OP_WRITE || chk == REQ_OP_WRITE_SAME || chk == REQ_OP_WRITE_ZEROES || chk == REQ_OP_ZONE_APPEND || chk == REQ_OP_FLUSH || chk == REQ_OP_SECURE_ERASE){
         if(sr(req)){    //random
             ++(cnt->write_rand_cnt);
         }else{          //sequential
