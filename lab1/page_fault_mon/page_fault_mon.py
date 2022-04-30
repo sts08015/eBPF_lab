@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # @lint-avoid-python-3-compatibility-imports
-from __future__ import print_function
 from bcc import BPF
 from time import sleep
 
