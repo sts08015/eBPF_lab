@@ -26,6 +26,9 @@ b.attach_kretprobe(event='blk_finish_plug',fn_name='ret_plugfin')
 b.attach_kprobe(event='io_schedule',fn_name='io_start')
 b.attach_kretprobe(event='io_schedule',fn_name='ret_io')
 
+#track nvme driver
+b.attach_kprobe(event='nvme_submit_cmd',fn_name='nvme_start')
+b.attach_kretprobe(event='nvme_submit_cmd',fn_name='ret_nvme')
 
 def print_timeline(s):
     print("TIMELINE")

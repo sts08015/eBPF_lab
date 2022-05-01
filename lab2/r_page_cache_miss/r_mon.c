@@ -1,4 +1,5 @@
 #include <uapi/linux/ptrace.h>
+#include <linux/nvme.h>
 #include <asm/types.h>
 #include <linux/fs.h>
 #include <linux/pagevec.h>
@@ -13,7 +14,7 @@ struct data_t
 
 struct key_data_t
 {
-    char comm[PROG_NAME_LEN];
+    u32 pid;
 };
 
 struct timeval {
@@ -74,6 +75,12 @@ static int chk_file(struct file * f)
     return ret;
 }
 
+static int chk_op(struct iov_iter *to)
+{
+    u32 tmp = to->type;
+    return (tmp&1);
+}
+
 size_t r_start(struct pt_regs *ctx,int fd, void *buf, size_t count)
 {
     struct data_t data = {0};
@@ -83,7 +90,7 @@ size_t r_start(struct pt_regs *ctx,int fd, void *buf, size_t count)
     if(ret!=0) return -1;
 
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     struct timeval time = {0};
     u64 ts = bpf_ktime_get_ns();
@@ -103,7 +110,7 @@ size_t ret_r(struct pt_regs *ctx,int fd, void *buf, size_t count)
     if(ret!=0) return -1;
 
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     //get current time
     u64 ts = bpf_ktime_get_ns();
@@ -125,11 +132,16 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     
     //check target file name
     ret = chk_file(iocb->ki_filp);
-    bpf_trace_printk("plz : %d\n",ret);
+    //bpf_trace_printk("plz : %d\n",ret);
     if(ret!=0) return -1;
     
+    //check read op
+    ret = chk_op(to);
+    if(ret!=0) return -1;
+
+
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -156,8 +168,12 @@ ssize_t ret_ext4(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     ret = chk_file(iocb->ki_filp);
     if(ret!=0) return -1;
 
+    //check read op
+    ret = chk_op(to);
+    if(ret!=0) return -1;
+
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -176,15 +192,16 @@ int pagecache_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *ite
     if(ret!=0) return -1;
 
     //check target file name
-    //ret = chk_file(iocb->ki_filp);
-    //if(ret!=0) return -1;
+    ret = chk_file(iocb->ki_filp);
+    if(ret!=0) return -1;
 
-    // TODO : check read flag by iov_iter
+    //check read op
+    ret = chk_op(iter);
+    if(ret!=0) return -1;
 
-    // TODO : 
 
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -203,11 +220,15 @@ int ret_pagecache(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
     if(ret!=0) return -1;
 
     //check target file name
-    //ret = chk_file(iocb->ki_filp);
-    //if(ret!=0) return -1;
+    ret = chk_file(iocb->ki_filp);
+    if(ret!=0) return -1;
+
+    //check read op
+    ret = chk_op(iter);
+    if(ret!=0) return -1;
 
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -219,15 +240,8 @@ int ret_pagecache(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
 
 void plug_start(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
-    //how can I distinguish?
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
-    bpf_trace_printk("plug : %s\n",kdata.comm);
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -238,12 +252,8 @@ void plug_start(struct pt_regs *ctx,struct blk_plug *plug)
 
 void ret_plug(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -253,12 +263,8 @@ void ret_plug(struct pt_regs *ctx,struct blk_plug *plug)
 
 void plugfin_start(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -268,12 +274,8 @@ void plugfin_start(struct pt_regs *ctx,struct blk_plug *plug)
 
 void ret_plugfin(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -283,13 +285,9 @@ void ret_plugfin(struct pt_regs *ctx,struct blk_plug *plug)
 
 void io_start(struct pt_regs *ctx)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
-    bpf_trace_printk("io : %s\n",kdata.comm);
+    kdata.pid = bpf_get_current_pid_tgid();
+    //bpf_trace_printk("io : %s\n",kdata.comm);
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
@@ -299,15 +297,25 @@ void io_start(struct pt_regs *ctx)
 
 void ret_io(struct pt_regs *ctx)
 {
-    //struct data_t data = {0};
-    //int ret = chk_comm(&(data.comm),sizeof(data.comm));
-    //if(ret!=0) return;
-
     struct key_data_t kdata = {0};
-    bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
+    kdata.pid = bpf_get_current_pid_tgid();
 
     u64 ts = bpf_ktime_get_ns();
     struct timeval* tmp = times.lookup(&kdata);
     if(tmp) tmp->set = ts;
     else return;
+}
+
+void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd,bool write_sq)
+{
+    struct key_data_t kdata = {0};
+    kdata.pid = bpf_get_current_pid_tgid();
+    u64 ts = bpf_ktime_get_ns();
+}
+
+void ret_nvme(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd,bool write_sq)
+{
+    struct key_data_t kdata = {0};
+    kdata.pid = bpf_get_current_pid_tgid();
+    u64 ts = bpf_ktime_get_ns();
 }
