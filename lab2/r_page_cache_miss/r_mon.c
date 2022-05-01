@@ -153,8 +153,8 @@ ssize_t ret_ext4(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     if(ret!=0) return -1;
 
     //check target file name
-    //ret = chk_file(iocb->ki_filp);
-    //if(ret!=0) return -1;
+    ret = chk_file(iocb->ki_filp);
+    if(ret!=0) return -1;
 
     struct key_data_t kdata = {0};
     bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
@@ -178,6 +178,10 @@ int pagecache_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *ite
     //check target file name
     //ret = chk_file(iocb->ki_filp);
     //if(ret!=0) return -1;
+
+    // TODO : check read flag by iov_iter
+
+    // TODO : 
 
     struct key_data_t kdata = {0};
     bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
@@ -218,6 +222,8 @@ void plug_start(struct pt_regs *ctx,struct blk_plug *plug)
     //struct data_t data = {0};
     //int ret = chk_comm(&(data.comm),sizeof(data.comm));
     //if(ret!=0) return;
+
+    //hwo can I distinguish?
 
     struct key_data_t kdata = {0};
     bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
