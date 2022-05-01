@@ -1,4 +1,5 @@
 from bcc import BPF
+import operator
 
 b = BPF(src_file='./r_mon.c')
 
@@ -25,4 +26,45 @@ b.attach_kretprobe(event='blk_finish_plug',fn_name='ret_plugfin')
 b.attach_kprobe(event='io_schedule',fn_name='io_start')
 b.attach_kretprobe(event='io_schedule',fn_name='ret_io')
 
-print('hello')
+
+def print_timeline(s):
+    print("TIMELINE")
+    arr = {}
+    arr["read start"]                   = s.rst
+    arr["read end"]                     = s.ret
+    arr["ext4_file_read_iter start"]    = s.est
+    arr["ext4_file_read_iter end"]      = s.eet
+    arr["filemap_get_pages start"]      = s.pst
+    arr["filemap_get_pages end"]        = s.pet
+    arr["blk_start_plug start"]         = s.bsst
+    arr["blk_start_plug end"]           = s.bset
+    arr["blk_finish_plug start"]        = s.bfst
+    arr["blk_finish_plug end"]          = s.bfet
+    arr["context switch start"]         = s.sst
+    arr["context switch end"]           = s.set
+
+    offset = s.rst
+    arr = sorted(arr.items(),key=operator.itemgetter(1))
+    for k,v in arr:
+        print("%-20s : %f"%(k,(v-offset)/1000))
+
+
+
+print('Press Ctrl-C after IO is over')
+while True:
+    try:
+        pass
+    except KeyboardInterrupt:
+         break
+
+event = b.get_table('events')
+timeval = b.get_table('times')
+
+for i in event.items():
+    key = i[0].comm.decode('utf-8','replace')
+    val = i[1].value
+    print('\nNAME : %s'%(key))
+    print('TOTAL IO : %d\n\n'%(val))
+
+tmp = timeval.items()[0]
+print_timeline(tmp[1])
