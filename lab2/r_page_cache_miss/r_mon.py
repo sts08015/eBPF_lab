@@ -10,17 +10,17 @@ b.attach_kretprobe(event=read_fnname,fn_name='ret_r')
 
 #track ext4 file read
 b.attach_kprobe(event='ext4_file_read_iter',fn_name="ext4_start")
-b.attach_kretprobe(event='ext4_file_read_iter',fn_name="ret_ext4")
+#b.attach_kretprobe(event='ext4_file_read_iter',fn_name="ret_ext4")
 
 #track page cache interaction
 b.attach_kprobe(event='filemap_get_pages',fn_name='pagecache_start')
-b.attach_kretprobe(event='filemap_get_pages',fn_name='ret_pagecache')
+#b.attach_kretprobe(event='filemap_get_pages',fn_name='ret_pagecache')
 
 #track plugging
 b.attach_kprobe(event='blk_start_plug',fn_name='plug_start')
-b.attach_kretprobe(event='blk_start_plug',fn_name='ret_plug')
+#b.attach_kretprobe(event='blk_start_plug',fn_name='ret_plug')
 b.attach_kprobe(event='blk_finish_plug',fn_name='plugfin_start')
-b.attach_kretprobe(event='blk_finish_plug',fn_name='ret_plugfin')
+#b.attach_kretprobe(event='blk_finish_plug',fn_name='ret_plugfin')
 
 #track context switching
 b.attach_kprobe(event='io_schedule',fn_name='io_start')
@@ -36,15 +36,17 @@ def print_timeline(s):
     arr["read start"]                   = s.rst
     arr["read end"]                     = s.ret
     arr["ext4_file_read_iter start"]    = s.est
-    arr["ext4_file_read_iter end"]      = s.eet
+    #arr["ext4_file_read_iter end"]      = s.eet
     arr["filemap_get_pages start"]      = s.pst
-    arr["filemap_get_pages end"]        = s.pet
+    #arr["filemap_get_pages end"]        = s.pet
     arr["blk_start_plug start"]         = s.bsst
-    arr["blk_start_plug end"]           = s.bset
+    #arr["blk_start_plug end"]           = s.bset
     arr["blk_finish_plug start"]        = s.bfst
-    arr["blk_finish_plug end"]          = s.bfet
+    #arr["blk_finish_plug end"]          = s.bfet
     arr["context switch start"]         = s.sst
     arr["context switch end"]           = s.set
+    arr["nvme_submit_cmd start"]        = s.nst
+    arr["nvme_submit_cmd end"]          = s.net
 
     offset = s.rst
     arr = sorted(arr.items(),key=operator.itemgetter(1))
