@@ -136,7 +136,7 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     bpf_trace_printk("haha"); 
     if(tmp)
     {
-        bpf_trace_printk("why %d\n",ts); 
+        bpf_trace_printk("why %llu\n",ts); 
         tmp->est = ts;
     }
     else return -1;
@@ -223,7 +223,7 @@ void plug_start(struct pt_regs *ctx,struct blk_plug *plug)
     //int ret = chk_comm(&(data.comm),sizeof(data.comm));
     //if(ret!=0) return;
 
-    //hwo can I distinguish?
+    //how can I distinguish?
 
     struct key_data_t kdata = {0};
     bpf_get_current_comm(&kdata.comm,sizeof(kdata.comm));
