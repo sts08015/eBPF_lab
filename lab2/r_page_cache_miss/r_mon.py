@@ -73,22 +73,26 @@ def breakdown():
     cur = 0
     for i in map1:
         val = i[1]
+        
         if val.cnt == 0:
             continue
+
         if val.cnt in branch_dict:
             branch_dict[val.cnt]+=1
         else:
             branch_dict[val.cnt] = 1
         
-        st = val.time/1000
+        print(val.cnt)
+        print(len(map2))
+        st = (val.time/1000)
         tt = 0
         for j in range(cur,cur+val.cnt):
-            val = map2[j][1]
-            tt += (val.time/1000)-st
+            val2 = map2[j][1]
+            tt += ((val2.time/1000)-st)
         
-        time_vals.append(tt/val.cnt)
+        #print(val.cnt)
+        time_vals.append((tt/val.cnt))
         cur+=val.cnt
-
 
     for k,v in branch_dict.items():
         print("%s -> %s branch : %d x %d" %(f_name1,f_name2,k,v))
@@ -97,7 +101,8 @@ def breakdown():
     for i in time_vals:
         at+=i
     
-    at /= len(time_vals)
+    if len(time_vals)!=0:
+        at /= len(time_vals)
     print('avg of avg time : %f' %(at))
 
 def print_info(obj):
@@ -128,7 +133,6 @@ while True:
         break
 
 event = b.get_table('events')
-#timeval = b.get_table('times')
 
 for i in event.items():
     print_info(i)
