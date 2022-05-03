@@ -1,5 +1,23 @@
 from bcc import BPF
+import sys
 import operator
+
+
+f_name = ['read','ext4_file_read_iter','filemap_read','submit_bio','nvme_submit_cmd','io_schedule']
+
+def usage():
+    print('\nsudo ./r_mon.py <func1> <func2>')
+    print("give name of two different functions you want to check #of branches and avg time\n")
+    print("LIST OF FUNCTION NAME")
+    for i in range(len(f_name)):
+        print("%d.   %s" %(i,f_name[i]))
+    exit(1)
+
+
+if len(sys.argv) != 3:
+    usage()
+elif (sys.argv[1] not in f_name) or (sys.argv[2] not in f_name) or sys.argv[1] == sys.argv[2]:
+    usage()
 
 b = BPF(src_file='./r_mon.c')
 
@@ -11,40 +29,76 @@ b.attach_kprobe(event=read_fnname,fn_name='r_start')
 b.attach_kprobe(event='ext4_file_read_iter',fn_name="ext4_start")
 
 #track page cache interaction
-b.attach_kprobe(event='filemap_read',fn_name='pagecache_start')
+b.attach_kprobe(event='filemap_read',fn_name='filemap_start')
 
-#track plugging
-b.attach_kprobe(event='blk_start_plug',fn_name='plug_start')
-b.attach_kprobe(event='blk_finish_plug',fn_name='plugfin_start')
+#track block io
+b.attach_kprobe(event='submit_bio',fn_name='bio_start')
+
+#track nvme driver
+b.attach_kprobe(event='nvme_submit_cmd',fn_name='nvme_start')
 
 #track context switching
 b.attach_kprobe(event='io_schedule',fn_name='io_start')
 b.attach_kretprobe(event='io_schedule',fn_name='ret_io')
 
-#track nvme driver
-b.attach_kprobe(event='nvme_submit_cmd',fn_name='nvme_start')
-b.attach_kretprobe(event='nvme_submit_cmd',fn_name='ret_nvme')
-
-
 def breakdown():
-    read_map = b.get_table('read_map')
-    ext4_map = b.get_table('ext4_map')
 
-    for i in read_map.items():
-        rv = i[1]
-        if rv.cnt == 0:
+    maps = []
+    maps.append(b.get_table('read_map'))
+    maps.append(b.get_table('ext4_map'))
+    maps.append(b.get_table('filemap_map'))
+    maps.append(b.get_table('bio_map'))
+    
+    idx1 = f_name.index(sys.argv[1])
+    idx2 = f_name.index(sys.argv[2])
+    f_name1 = ""
+    f_name2 = ""
+
+    if idx1 < idx2:
+        f_name1 = sys.argv[1]
+        f_name2 = sys.argv[2]
+    else:
+        f_name1 = sys.argv[2]
+        f_name2 = sys.argv[1]
+        tmp = idx1
+        idx1 = idx2
+        idx2 = tmp
+
+    map1 = maps[idx1].items()
+    map2 = maps[idx2].items()
+
+    branch_dict = {}
+    time_vals = []
+
+    cur = 0
+    for i in map1:
+        val = i[1]
+        if val.cnt == 0:
             continue
-        offset = rv.time/1000
-        #print(offset)
-        print('read -> ext4 branch num : %d' %(rv.cnt))
-        aretime = 0
-        for i1 in ext4_map.items():
-            ev = i1[1]
-            #print(ev.time/1000)
-            aretime+=(ev.time/1000-offset)
+        if val.cnt in branch_dict:
+            branch_dict[val.cnt]+=1
+        else:
+            branch_dict[val.cnt] = 1
+        
+        st = val.time/1000
+        tt = 0
+        for j in range(cur,cur+val.cnt):
+            val = map2[j][1]
+            tt += (val.time/1000)-st
+        
+        time_vals.append(tt/val.cnt)
+        cur+=val.cnt
 
-        print('read -> ext4 avg time : %f' %(aretime/rv.cnt))
 
+    for k,v in branch_dict.items():
+        print("%s -> %s branch : %d x %d" %(f_name1,f_name2,k,v))
+
+    at = 0
+    for i in time_vals:
+        at+=i
+    
+    at /= len(time_vals)
+    print('avg of avg time : %f' %(at))
 
 def print_info(obj):
     pid = obj[0].pid
@@ -58,12 +112,10 @@ def print_info(obj):
     print("%-12s : %5d" %("read",val.read))
     print("%-12s : %5d" %("ext4",val.ext4))
     print("%-12s : %5d" %("pcache",val.pcache))
-    print("%-12s : %5d" %("plug_start",val.plug_start))
-    print("%-12s : %5d" %("plug_fin",val.plug_fin))
+    print("%-12s : %5d" %("bio_start",val.bio_start))
+    print("%-12s : %5d" %("nvme_start",val.nvme_start))
     print("%-12s : %5d" %("sched_start",val.sched_start))
     print("%-12s : %5d" %("sched_fin",val.sched_fin))
-    print("%-12s : %5d" %("nvme_start",val.nvme_fin))
-    print("%-12s : %5d" %("nvme_fin",val.nvme_fin))
     print('')
 
 
