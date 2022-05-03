@@ -4,7 +4,9 @@
 #include <linux/fs.h>
 #include <linux/pagevec.h>
 #include <linux/blkdev.h>
-#include "./linux-5.13/include/linux/nvme.h"
+#include <linux/blk-mq.h>
+#include "./linux-5.13/drivers/nvme/host/nvme.h"
+#include "nvme_related.h"
 
 #define PROG_NAME_LEN 16
 #define FUNC_NAME_LEN 16
@@ -33,6 +35,7 @@ struct read_val{
 };
 
 struct ext4_key{
+    u32 pid;
     u32 pos;
 };
 
@@ -42,6 +45,7 @@ struct ext4_val{
 };
 
 struct filemap_key{
+    u32 pid;
     u32 pos;
 };
 
@@ -52,6 +56,7 @@ struct filemap_val{
 };
 
 struct bio_key{
+    u32 pid;
     u32 hmm;
 };
 
@@ -170,6 +175,7 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     struct ext4_key ek = {0};
     struct ext4_val ev = {0};
     ek.pos = iocb->ki_pos;
+    ek.pid = k.pid;
     ev.time = t;
 
     struct read_key rk = {0};
@@ -207,11 +213,13 @@ int filemap_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
     struct filemap_key fk = {0};
     struct filemap_val fv = {0};
     fk.pos = iocb->ki_pos;
+    fk.pid = k.pid;
     fv.len = iter->bvec->bv_len;
     fv.time = t;
     
     struct ext4_key ek = {0};
     ek.pos = fk.pos;
+    ek.pid = k.pid;
 
     struct ext4_val* tmp2 = ext4_map.lookup(&ek);
     if(tmp2) ++(tmp2->cnt);
@@ -263,6 +271,8 @@ void bio_start(struct pt_regs *ctx,struct bio *bio)
     
     struct bio_key bk = {0};
     struct bio_val bv = {0};
+    bk.pid = k.pid;
+    //NOT FINISHED WITH KEY SELECTION!
     bv.time = t;
 
     bio_map.insert(&bk,&bv);

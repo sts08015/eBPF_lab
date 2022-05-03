@@ -1,22 +1,22 @@
 from bcc import BPF
 import sys
-import operator
-
 
 f_name = ['read','ext4_file_read_iter','filemap_read','submit_bio','nvme_submit_cmd','io_schedule']
 
 def usage():
     print('\nsudo ./r_mon.py <func1> <func2>')
     print("give name of two different functions you want to check #of branches and avg time\n")
+    print("two different functions MUST be consecutive")
     print("LIST OF FUNCTION NAME")
     for i in range(len(f_name)):
         print("%d.   %s" %(i,f_name[i]))
     exit(1)
 
-
 if len(sys.argv) != 3:
     usage()
 elif (sys.argv[1] not in f_name) or (sys.argv[2] not in f_name) or sys.argv[1] == sys.argv[2]:
+    usage()
+elif abs(f_name.index(sys.argv[1]) - f_name.index(sys.argv[2]))!=1:
     usage()
 
 b = BPF(src_file='./r_mon.c')
@@ -42,13 +42,12 @@ b.attach_kprobe(event='io_schedule',fn_name='io_start')
 b.attach_kretprobe(event='io_schedule',fn_name='ret_io')
 
 def breakdown():
-
     maps = []
     maps.append(b.get_table('read_map'))
     maps.append(b.get_table('ext4_map'))
     maps.append(b.get_table('filemap_map'))
     maps.append(b.get_table('bio_map'))
-    
+
     idx1 = f_name.index(sys.argv[1])
     idx2 = f_name.index(sys.argv[2])
     f_name1 = ""
@@ -70,15 +69,15 @@ def breakdown():
     branch_dict = {}
     time_vals = []
 
-    cur = 0
+    cur = 0 
     for i in map1:
         val = i[1]
-        
+
         if val.cnt == 0:
             continue
 
         if val.cnt in branch_dict:
-            branch_dict[val.cnt]+=1
+            branch_dict[val.cnt] += 1
         else:
             branch_dict[val.cnt] = 1
         
@@ -87,7 +86,10 @@ def breakdown():
         st = (val.time/1000)
         tt = 0
         for j in range(cur,cur+val.cnt):
+            #print(j)
             val2 = map2[j][1]
+            x = ((val2.time/1000)-st)
+            print(x)
             tt += ((val2.time/1000)-st)
         
         #print(val.cnt)
@@ -110,18 +112,19 @@ def print_info(obj):
     val = obj[1]
     
     if val.ext4 == 0:
-        return
+        return 0
     
     print('%-12s : %5u ' %("PID",pid))
     print("=== CALL_NUM ===")
     print("%-12s : %5d" %("read",val.read))
     print("%-12s : %5d" %("ext4",val.ext4))
     print("%-12s : %5d" %("pcache",val.pcache))
-    print("%-12s : %5d" %("bio_start",val.bio_start))
+    print("%-12s : %5d" %("submit_io",val.bio_start))
     print("%-12s : %5d" %("nvme_start",val.nvme_start))
     print("%-12s : %5d" %("sched_start",val.sched_start))
     print("%-12s : %5d" %("sched_fin",val.sched_fin))
     print('')
+    return 1
 
 
 print('Press Ctrl-C after IO is over')
@@ -134,7 +137,9 @@ while True:
 
 event = b.get_table('events')
 
-for i in event.items():
-    print_info(i)
+cnt = 0
+for i in range(len(event)):
+    obj = event.items()[i]
+    chk = print_info(obj)
 
 breakdown()
