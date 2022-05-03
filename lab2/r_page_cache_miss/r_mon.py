@@ -11,7 +11,7 @@ b.attach_kprobe(event=read_fnname,fn_name='r_start')
 b.attach_kprobe(event='ext4_file_read_iter',fn_name="ext4_start")
 
 #track page cache interaction
-b.attach_kprobe(event='filemap_get_pages',fn_name='pagecache_start')
+b.attach_kprobe(event='filemap_read',fn_name='pagecache_start')
 
 #track plugging
 b.attach_kprobe(event='blk_start_plug',fn_name='plug_start')
@@ -24,31 +24,26 @@ b.attach_kretprobe(event='io_schedule',fn_name='ret_io')
 #track nvme driver
 b.attach_kprobe(event='nvme_submit_cmd',fn_name='nvme_start')
 b.attach_kretprobe(event='nvme_submit_cmd',fn_name='ret_nvme')
-'''
-'''
 
-def print_timeline(s):
-    print("TIMELINE")
-    arr = {}
-    arr["read start"]                   = s.rst
-    #arr["read end"]                     = s.ret
-    arr["ext4_file_read_iter start"]    = s.est
-    #arr["ext4_file_read_iter end"]      = s.eet
-    arr["filemap_get_pages start"]      = s.pst
-    #arr["filemap_get_pages end"]        = s.pet
-    #arr["blk_start_plug start"]         = s.bsst
-    #arr["blk_start_plug end"]           = s.bset
-    #arr["blk_finish_plug start"]        = s.bfst
-    #arr["blk_finish_plug end"]          = s.bfet
-    #arr["context switch start"]         = s.sst
-    #arr["context switch end"]           = s.set
-    #arr["nvme_submit_cmd start"]        = s.nst
-    #arr["nvme_submit_cmd end"]          = s.net
 
-    offset = s.rst
-    arr = sorted(arr.items(),key=operator.itemgetter(1))
-    for k,v in arr:
-        print("%-20s : %f"%(k,(v-offset)/1000))
+def breakdown():
+    read_map = b.get_table('read_map')
+    ext4_map = b.get_table('ext4_map')
+
+    for i in read_map.items():
+        rv = i[1]
+        if rv.cnt == 0:
+            continue
+        offset = rv.time/1000
+        #print(offset)
+        print('read -> ext4 branch num : %d' %(rv.cnt))
+        aretime = 0
+        for i1 in ext4_map.items():
+            ev = i1[1]
+            #print(ev.time/1000)
+            aretime+=(ev.time/1000-offset)
+
+        print('read -> ext4 avg time : %f' %(aretime/rv.cnt))
 
 
 def print_info(obj):
@@ -86,5 +81,4 @@ event = b.get_table('events')
 for i in event.items():
     print_info(i)
 
-#tmp = timeval.items()[0]
-#print_timeline(tmp[1])
+breakdown()
