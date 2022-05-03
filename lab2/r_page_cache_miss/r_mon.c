@@ -7,42 +7,38 @@
 #include <linux/blkdev.h>
 
 #define PROG_NAME_LEN 16
+#define FUNC_NAME_LEN 16
+#define MAX_QUE_LEN 10240
 
-struct data_t
-{
-    char comm[PROG_NAME_LEN];
-};
-
-struct key_data_t
-{
+struct key_t{
     u32 pid;
 };
 
-struct timeval {
-    u64 rst;
-    u64 ret;
-
-    u64 est;
-    //u64 eet;
-
-    u64 pst;
-    //u64 pet;
-
-    u64 bsst;
-    //u64 bset;
-
-    u64 bfst;
-    //u64 bfet;
-
-    u64 sst;
-    u64 set;
-
-    u64 nst;
-    u64 net;
+struct call_num{
+    u16 read;
+    u16 ext4;
+    u16 pcache;
+    u16 plug_start;
+    u16 plug_fin;
+    u16 sched_start;
+    u16 sched_fin;
+    u16 nvme_start;
+    u16 nvme_fin;
 };
 
-BPF_HASH(times,struct key_data_t,struct timeval);
-BPF_HASH(events,struct data_t);
+struct f_order{
+    char f_name[FUNC_NAME_LEN];
+    u16 order;
+};
+
+struct timeval {
+    double time;    //microsecs
+};
+
+BPF_HASH(events,struct key_t, struct call_num);
+
+BPF_HASH(inner, struct f_order, struct timeval);
+BPF_HASH_OF_MAPS(root, struct key_t, "inner", 10);
 
 static const char * fio = "fio";
 static const char * target = "test";
@@ -87,72 +83,42 @@ static int chk_op(struct iov_iter *to)
 
 size_t r_start(struct pt_regs *ctx,int fd, void *buf, size_t count)
 {
-    struct data_t data = {0};
+    char comm[PROG_NAME_LEN] ={0};
+    struct key_t k = {0};
 
     //check process name
-    int ret = chk_comm(data.comm,&(data.comm),sizeof(data.comm));
+    int ret = chk_comm(comm,&comm,sizeof(comm));
     if(ret!=0) return -1;
 
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    //check pid
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
 
-    struct timeval time = {0};
-    u64 ts = bpf_ktime_get_ns();
-    time.rst = ts;
-
-    times.update(&kdata,&time);
-
-    return 0;
-}
-
-size_t ret_r(struct pt_regs *ctx,int fd, void *buf, size_t count)
-{
-    struct data_t data = {0};
-
-    //check process name
-    int ret = chk_comm(data.comm,&(data.comm),sizeof(data.comm));
-    if(ret!=0) return -1;
-
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
-
-    //get current time
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp) tmp->ret = ts;
-    else return -1;
+    struct call_num num = {0};
+    num.read = 1;
     
-    //events.increment(data);
+    events.update(&k,&num);
+
     return 0;
 }
 
 ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
 {
-    struct data_t data = {0};
+    struct key_t k = {0};
 
-    //check process name
-    int ret = chk_comm(data.comm,&(data.comm),sizeof(data.comm));
-    if(ret!=0) return -1;
-    
     //check target file name
-    ret = chk_file(iocb->ki_filp);
-    //bpf_trace_printk("plz : %d\n",ret);
+    int ret = chk_file(iocb->ki_filp);
     if(ret!=0) return -1;
     
     //check read op
     ret = chk_op(to);
     if(ret!=0) return -1;
 
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
 
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("ext : %llu\n",ts);
-        tmp->est = ts;
-        events.increment(data);
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        ++(tmp->ext4);
+        bpf_trace_printk("fis_ext %u\n",k.pid);
     }
     else return -1;
 
@@ -161,29 +127,21 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
 
 int pagecache_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,struct pagevec *pvec)
 {
-    struct data_t data = {0};
-
-    //check process name
-    int ret = chk_comm(data.comm,&(data.comm),sizeof(data.comm));
-    if(ret!=0) return -1;
+    struct key_t k = {0};
 
     //check target file name
-    ret = chk_file(iocb->ki_filp);
+    int ret = chk_file(iocb->ki_filp);
     if(ret!=0) return -1;
 
     //check read op
     ret = chk_op(iter);
     if(ret!=0) return -1;
 
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
-
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("page : %llu\n",ts);
-        tmp->pst = ts;
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_pcache %u\n",k.pid);
+        ++(tmp->pcache);
     } 
     else return -1;
 
@@ -192,90 +150,80 @@ int pagecache_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *ite
 
 void plug_start(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct key_t k = {0};
 
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp) 
-    {
-        bpf_trace_printk("plug : %llu\n",ts);
-        tmp->bsst = ts;
-    }    
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_plug %u\n",k.pid);
+        ++(tmp->plug_start);
+    }
     else return;
-
 }
 
 void plugfin_start(struct pt_regs *ctx,struct blk_plug *plug)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct key_t k = {0};
 
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp) 
-    {
-        bpf_trace_printk("plug_fin : %llu\n",ts);
-        tmp->bfst = ts;
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_plug_fin %u\n",k.pid);
+        ++(tmp->plug_fin);
     }
     else return;
 }
 
 void io_start(struct pt_regs *ctx)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
-    //bpf_trace_printk("io : %s\n",kdata.comm);
+    struct key_t k = {0};
 
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("io_start : %llu\n",ts);
-        tmp->sst = ts;
-    } 
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_sched_start %u\n",k.pid);
+        ++(tmp->sched_start);
+    }
     else return;
 }
 
 void ret_io(struct pt_regs *ctx)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct key_t k = {0};
 
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("ret_io : %llu\n",ts);
-        tmp->set = ts;
-    } 
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_sched_fin %u\n",k.pid);
+        ++(tmp->sched_fin);
+    }
     else return;
 }
 
 void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd,bool write_sq)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("nvme_start : %llu\n",ts);
-        tmp->nst = ts;
-    } 
+    struct key_t k = {0};
+
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_nvme_start %u\n",k.pid);
+        ++(tmp->nvme_start);
+    }
     else return;
 }
 
 void ret_nvme(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd,bool write_sq)
 {
-    struct key_data_t kdata = {0};
-    kdata.pid = bpf_get_current_pid_tgid()&0xffffffff;
-    u64 ts = bpf_ktime_get_ns();
-    struct timeval* tmp = times.lookup(&kdata);
-    if(tmp)
-    {
-        bpf_trace_printk("ret_nvme : %llu\n",ts);
-        tmp->net = ts;
-    } 
+    struct key_t k = {0};
+
+    k.pid = bpf_get_current_pid_tgid()&0xffffffff;
+    struct call_num* tmp = events.lookup(&k);
+    if(tmp){
+        bpf_trace_printk("fis_nvme_fin %u\n",k.pid);
+        ++(tmp->nvme_fin);
+    }
     else return;
 }
+/*
+*/
