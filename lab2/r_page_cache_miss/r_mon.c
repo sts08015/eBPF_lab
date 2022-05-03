@@ -1,10 +1,10 @@
 #include <uapi/linux/ptrace.h>
-#include <linux/nvme.h>
 #include <linux/pci.h>
 #include <asm/types.h>
 #include <linux/fs.h>
 #include <linux/pagevec.h>
 #include <linux/blkdev.h>
+#include "./linux-5.13/include/linux/nvme.h"
 
 #define PROG_NAME_LEN 16
 #define FUNC_NAME_LEN 16
@@ -282,7 +282,7 @@ void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_comman
     else return;
     
     bpf_trace_printk("nvme_ts %llu\n",t);
-    bpf_trace_printk("nvme_dbg %s\n",nvmeq->nvme_dev->dev->init_name);
+    bpf_trace_printk("nvme_dbg %d\n",write_sq);
     
 }
 
