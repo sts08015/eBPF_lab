@@ -8,7 +8,6 @@
 
 #define PROG_NAME_LEN 16
 #define FUNC_NAME_LEN 16
-#define MAX_QUE_LEN 10240
 
 struct key_t{
     u32 pid;
@@ -97,7 +96,6 @@ size_t r_start(struct pt_regs *ctx,int fd, void *buf, size_t count)
     num.read = 1;
     
     events.update(&k,&num);
-
     return 0;
 }
 
@@ -119,6 +117,8 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     if(tmp){
         ++(tmp->ext4);
         bpf_trace_printk("fis_ext %u\n",k.pid);
+        bpf_trace_printk("fis_ext cnt : %u\n",to->count);
+        bpf_trace_printk("fis_ext len : %u\n",to->iov->iov_len);
     }
     else return -1;
 

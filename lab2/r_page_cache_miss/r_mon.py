@@ -35,8 +35,6 @@ def print_timeline(s):
     arr["ext4_file_read_iter start"]    = s.est
     #arr["ext4_file_read_iter end"]      = s.eet
     arr["filemap_get_pages start"]      = s.pst
-
-
     #arr["filemap_get_pages end"]        = s.pet
     #arr["blk_start_plug start"]         = s.bsst
     #arr["blk_start_plug end"]           = s.bset
