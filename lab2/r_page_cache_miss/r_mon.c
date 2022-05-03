@@ -14,15 +14,15 @@ struct key_t{
 };
 
 struct call_num{
-    u16 read;
-    u16 ext4;
-    u16 pcache;
-    u16 plug_start;
-    u16 plug_fin;
-    u16 sched_start;
-    u16 sched_fin;
-    u16 nvme_start;
-    u16 nvme_fin;
+    volatile u32 read;
+    volatile u32 ext4;
+    volatile u32 pcache;
+    volatile u32 plug_start;
+    volatile u32 plug_fin;
+    volatile u32 sched_start;
+    volatile u32 sched_fin;
+    volatile u32 nvme_start;
+    volatile u32 nvme_fin;
 };
 
 struct f_order{
@@ -34,7 +34,7 @@ struct timeval {
     double time;    //microsecs
 };
 
-BPF_HASH(events,struct key_t, struct call_num);
+BPF_HASH(events,struct key_t, struct call_num,300000);
 
 BPF_HASH(inner, struct f_order, struct timeval);
 BPF_HASH_OF_MAPS(root, struct key_t, "inner", 10);
@@ -95,7 +95,7 @@ size_t r_start(struct pt_regs *ctx,int fd, void *buf, size_t count)
     struct call_num num = {0};
     num.read = 1;
     
-    events.update(&k,&num);
+    events.insert(&k,&num);
     return 0;
 }
 
@@ -116,9 +116,9 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     struct call_num* tmp = events.lookup(&k);
     if(tmp){
         ++(tmp->ext4);
+        
         bpf_trace_printk("fis_ext %u\n",k.pid);
-        bpf_trace_printk("fis_ext cnt : %u\n",to->count);
-        bpf_trace_printk("fis_ext len : %u\n",to->iov->iov_len);
+        bpf_trace_printk("fis_ext_num %u\n",tmp->ext4);
     }
     else return -1;
 

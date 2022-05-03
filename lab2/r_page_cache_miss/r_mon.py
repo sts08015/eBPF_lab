@@ -54,6 +54,10 @@ def print_timeline(s):
 def print_info(obj):
     pid = obj[0].pid
     val = obj[1]
+    
+    if val.ext4 == 0:
+        return
+    
     print('%-12s : %5u ' %("PID",pid))
     print("=== CALL_NUM ===")
     print("%-12s : %5d" %("read",val.read))
@@ -80,7 +84,6 @@ event = b.get_table('events')
 #timeval = b.get_table('times')
 
 for i in event.items():
-    #comm = i[0].comm.decode('utf-8','replace')
     print_info(i)
 
 #tmp = timeval.items()[0]
