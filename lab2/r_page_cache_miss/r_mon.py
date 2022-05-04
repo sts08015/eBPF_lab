@@ -84,10 +84,7 @@ def breakdown():
         else:
             branch_dict[val.cnt] = 1
         
-        #print(val.cnt)
-        #print(len(map2))
         st = (val.time/1000)
-        #print(st)
         tt = 0
         for j in range(cur,cur+val.cnt):
             val2 = map2[j][1]

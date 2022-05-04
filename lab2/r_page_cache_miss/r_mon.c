@@ -256,7 +256,6 @@ int filemap_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
 void bio_start(struct pt_regs *ctx,struct bio *bio)
 {
     u64 t = bpf_ktime_get_ns();
-    bpf_trace_printk("bio_dbg");
 
     struct key_t k = {0};
 
@@ -294,7 +293,6 @@ void bio_start(struct pt_regs *ctx,struct bio *bio)
 void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd, bool write_sq)
 {
     u64 t = bpf_ktime_get_ns();
-    bpf_trace_printk("nvme_dbg");
     struct key_t k = {0};
 
     k.pid = bpf_get_current_pid_tgid();
