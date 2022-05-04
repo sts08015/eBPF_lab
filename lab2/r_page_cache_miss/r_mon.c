@@ -60,6 +60,7 @@ struct bio_val{
 struct nvme_key{
     u32 pid;
     u32 hmm;
+    u32 order;
 };
 
 struct nvme_val{
@@ -67,12 +68,22 @@ struct nvme_val{
     volatile u32 cnt;
 };
 
-struct io_key{
+struct io_key_1{
     u32 pid;
     u32 hmm;
 };
 
-struct io_val{
+struct io_val_1{
+    u64 time;
+    volatile u32 cnt;
+};
+
+struct io_key_2{
+    u32 pid;
+    u32 hmm;
+};
+
+struct io_val_2{
     u64 time;
     volatile u32 cnt;
 };
@@ -86,7 +97,9 @@ BPF_HASH(bio_map,struct bio_key, struct bio_val,300000);
 BPF_QUEUE(queue1,struct bio_key,300000);
 BPF_HASH(nvme_map,struct nvme_key, struct nvme_val,300000);
 BPF_QUEUE(queue2,struct nvme_key,300000);
-BPF_HASH(io_map,struct io_key, struct io_val,300000);
+BPF_HASH(io_map_1,struct io_key_1, struct io_val_1,300000);
+BPF_QUEUE(queue3,struct io_key_1,300000);
+BPF_HASH(io_map_2,struct io_key_2, struct io_val_2,300000);
 
 static const char * fio = "fio";
 static const char * target = "test";
@@ -161,7 +174,6 @@ size_t r_start(struct pt_regs *ctx, int fd, void *buf, size_t count)
     rv.time = t;
     read_map.insert(&rk,&rv);
 
-    bpf_trace_printk("read_ts %llu\n",t);
     return 0;
 }
 
@@ -259,7 +271,7 @@ void bio_start(struct pt_regs *ctx,struct bio *bio)
     if(!tmp) return;
 
     struct filemap_key fk = {0};
-    ret = queue.pop(&fk);
+    ret = (int)queue.pop(&fk);
     if(ret == 0)
     {
         struct filemap_val* tmp2 = filemap_map.lookup(&fk);
@@ -294,20 +306,22 @@ void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_comman
     if(!tmp) return;
     
     struct bio_key bk = {0};
-    int ret = queue1.pop(&bk);
+    int ret = (int)queue1.pop(&bk);
     if(ret != 0) return;
     
     struct bio_val* tmp2 = bio_map.lookup(&bk);
     if(tmp2){
         ++(tmp2->cnt);
-        ++(tmp->nvme_start);
+        int h = ++(tmp->nvme_start);
 
         struct nvme_key nk = {0};
         struct nvme_val nv = {0};
         nk.hmm = (cmd->rw).dptr.sgl.addr;
         nk.pid = k.pid;
+        nk.order = h;
         nv.time = t;
         nvme_map.update(&nk,&nv);
+        queue2.push(&nk,BPF_EXIST);
     }
 }
 
@@ -318,13 +332,25 @@ void io_start(struct pt_regs *ctx)
 
     k.pid = bpf_get_current_pid_tgid();
     struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        //bpf_trace_printk("fis_sched_start %u\n",k.pid);
-        ++(tmp->sched_start);
-    }
-    else return;
-    //bpf_trace_printk("sched_ts %llu\n",t);
+    
+    if(!tmp) return;
 
+    struct nvme_key nk = {0};
+    int ret = (int)queue2.pop(&nk);
+    if(ret != 0) return;
+
+    struct nvme_val* tmp2 = nvme_map.lookup(&nk);
+    if(tmp2){
+        int h = ++(tmp->sched_start);
+        ++(tmp2->cnt);
+        struct io_key_1 ik = {0};
+        struct io_val_1 iv = {0};
+        ik.pid = k.pid;
+        ik.hmm = h;
+        iv.time = t;
+        io_map_1.update(&ik,&iv);
+        queue3.push(&ik,BPF_EXIST);
+    }
 }
 
 void ret_io(struct pt_regs *ctx)
@@ -334,10 +360,22 @@ void ret_io(struct pt_regs *ctx)
 
     k.pid = bpf_get_current_pid_tgid();
     struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        //bpf_trace_printk("fis_sched_fin %u\n",k.pid);
-        ++(tmp->sched_fin);
+    if(!tmp) return;
+    
+    struct io_key_1 ik1 = {0};
+    int ret = (int)queue3.pop(&ik1);
+    if(ret != 0) return;
+
+    struct io_val_1* tmp2 = io_map_1.lookup(&ik1);
+    if(tmp2)
+    {
+        int h = ++(tmp->sched_fin);
+        ++(tmp2->cnt);
+        struct io_key_2 ik = {0};
+        struct io_val_2 iv = {0};
+        ik.pid = k.pid;
+        ik.hmm = h;
+        iv.time = t;
+        io_map_2.update(&ik,&iv);
     }
-    else return;
-    //bpf_trace_printk("sched_f_ts %llu\n",t);
 }

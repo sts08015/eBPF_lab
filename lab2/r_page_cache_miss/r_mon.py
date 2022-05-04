@@ -1,7 +1,7 @@
 from bcc import BPF
 import sys
 
-f_name = ['read','ext4_file_read_iter','filemap_read','submit_bio','nvme_submit_cmd','io_schedule']
+f_name = ['read','ext4_file_read_iter','filemap_read','submit_bio','nvme_submit_cmd','io_schedule_start','io_schedule_fin']
 
 def usage():
     print('\nsudo ./r_mon.py <func1> <func2>')
@@ -47,6 +47,9 @@ def breakdown():
     maps.append(b.get_table('ext4_map'))
     maps.append(b.get_table('filemap_map'))
     maps.append(b.get_table('bio_map'))
+    maps.append(b.get_table('nvme_map'))
+    maps.append(b.get_table('io_map_1'))
+    maps.append(b.get_table('io_map_2'))
 
     idx1 = f_name.index(sys.argv[1])
     idx2 = f_name.index(sys.argv[2])
@@ -144,5 +147,8 @@ cnt = 0
 for i in range(len(event)):
     obj = event.items()[i]
     chk = print_info(obj)
+    if chk!=0:
+        cnt+=1
 
+multi = cnt>1
 breakdown()
