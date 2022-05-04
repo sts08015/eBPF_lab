@@ -1,12 +1,4 @@
-#include <uapi/linux/ptrace.h>
-#include <linux/pci.h>
-#include <asm/types.h>
-#include <linux/fs.h>
-#include <linux/pagevec.h>
-#include <linux/blkdev.h>
-#include <linux/blk-mq.h>
-#include "./linux-5.13/drivers/nvme/host/nvme.h"
-#include "nvme_related.h"
+#include "need.h"
 
 #define PROG_NAME_LEN 16
 #define FUNC_NAME_LEN 16
@@ -65,14 +57,36 @@ struct bio_val{
     volatile u32 cnt;
 };
 
+struct nvme_key{
+    u32 pid;
+    u32 hmm;
+};
+
+struct nvme_val{
+    u64 time;
+    volatile u32 cnt;
+};
+
+struct io_key{
+    u32 pid;
+    u32 hmm;
+};
+
+struct io_val{
+    u64 time;
+    volatile u32 cnt;
+};
+
 BPF_HASH(events,struct key_t, struct call_num,300000);
 BPF_HASH(read_map,struct read_key, struct read_val,300000);
 BPF_HASH(ext4_map,struct ext4_key, struct ext4_val,300000);
 BPF_HASH(filemap_map,struct filemap_key, struct filemap_val,300000);
 BPF_QUEUE(queue,struct filemap_key,300000);
-
 BPF_HASH(bio_map,struct bio_key, struct bio_val,300000);
-
+BPF_QUEUE(queue1,struct bio_key,300000);
+BPF_HASH(nvme_map,struct nvme_key, struct nvme_val,300000);
+BPF_QUEUE(queue2,struct nvme_key,300000);
+BPF_HASH(io_map,struct io_key, struct io_val,300000);
 
 static const char * fio = "fio";
 static const char * target = "test";
@@ -147,6 +161,7 @@ size_t r_start(struct pt_regs *ctx, int fd, void *buf, size_t count)
     rv.time = t;
     read_map.insert(&rk,&rv);
 
+    bpf_trace_printk("read_ts %llu\n",t);
     return 0;
 }
 
@@ -166,11 +181,7 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     k.pid = bpf_get_current_pid_tgid();
 
     struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        ++(tmp->ext4);
-        //bpf_trace_printk("fis_ext_pos %u\n",iocb->ki_pos);
-    }
-    else return -1;
+    if(!tmp) return -1;
 
     struct ext4_key ek = {0};
     struct ext4_val ev = {0};
@@ -184,8 +195,10 @@ ssize_t ext4_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *to)
     if(tmp2) ++(tmp2->cnt);
     else return -1;
 
+    ++(tmp->ext4);
     ext4_map.insert(&ek,&ev);
     
+    bpf_trace_printk("ext4_ts %llu\n",t);
     return 0;
 }
 
@@ -204,11 +217,7 @@ int filemap_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
 
     k.pid = bpf_get_current_pid_tgid();
     struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        //bpf_trace_printk("fis_pcache_pos %u\n",iocb->ki_pos);
-        ++(tmp->pcache);
-    } 
-    else return -1;
+    if(!tmp) return -1;
 
     struct filemap_key fk = {0};
     struct filemap_val fv = {0};
@@ -224,11 +233,8 @@ int filemap_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
     struct ext4_val* tmp2 = ext4_map.lookup(&ek);
     if(tmp2) ++(tmp2->cnt);
     else return -1;
-
+    ++(tmp->pcache);
     filemap_map.insert(&fk,&fv);
-    bpf_trace_printk("fileread_dbg_len %u\n",iter->bvec->bv_len);
-    bpf_trace_printk("fileread_dbg_offset %u\n",iter->bvec->bv_offset);
-    bpf_trace_printk("fileread_dbg_alread %u\n",already_read);
 
     queue.push(&fk,BPF_EXIST);
 
@@ -238,62 +244,71 @@ int filemap_start(struct pt_regs *ctx,struct kiocb *iocb, struct iov_iter *iter,
 void bio_start(struct pt_regs *ctx,struct bio *bio)
 {
     u64 t = bpf_ktime_get_ns();
+    bpf_trace_printk("bio_dbg");
 
     struct key_t k = {0};
-
-    k.pid = bpf_get_current_pid_tgid();
-    struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        //bpf_trace_printk("fis_plug %u\n",k.pid);
-        ++(tmp->bio_start);
-    }
-    else return;
 
     //check target disk name
     int ret = chk_disk(bio);
     if(ret!=0) return;
-    bpf_trace_printk("bio_dbg_size %u\n",(bio->bi_iter).bi_size);
-    bpf_trace_printk("bio_dbg_vcnt %u\n",bio->bi_vcnt);
-    bpf_trace_printk("bio_dbg_cnt %u\n",bio->__bi_cnt);
+
+    k.pid = bpf_get_current_pid_tgid();
+
+    struct call_num* tmp = events.lookup(&k);
+    int h;
+    if(!tmp) return;
 
     struct filemap_key fk = {0};
     ret = queue.pop(&fk);
-    bpf_trace_printk("bio_dbg_que %u\n",ret);
-    if(ret != 0) return;
-
-    struct filemap_val* tmp2 = filemap_map.lookup(&fk);
-    if(tmp2){
-        int set = (tmp2->len)/((bio->bi_iter).bi_size);
-        bpf_trace_printk("bio_dbg_set %u\n",set);
-        (tmp2->cnt) += set;
+    if(ret == 0)
+    {
+        struct filemap_val* tmp2 = filemap_map.lookup(&fk);
+        if(tmp2){
+            int set = (tmp2->len)/((bio->bi_iter).bi_size);
+            (tmp2->cnt) += set;
+        }
     }
-    else return;
-    
+    h = ++(tmp->bio_start);
     struct bio_key bk = {0};
     struct bio_val bv = {0};
     bk.pid = k.pid;
-    //NOT FINISHED WITH KEY SELECTION!
+    bk.hmm = h;
     bv.time = t;
 
+    queue1.push(&bk,BPF_EXIST);
     bio_map.insert(&bk,&bv);
 }
 
 void nvme_start(struct pt_regs *ctx,struct nvme_queue *nvmeq, struct nvme_command *cmd, bool write_sq)
 {
     u64 t = bpf_ktime_get_ns();
+    bpf_trace_printk("nvme_dbg");
     struct key_t k = {0};
 
     k.pid = bpf_get_current_pid_tgid();
     struct call_num* tmp = events.lookup(&k);
-    if(tmp){
-        //bpf_trace_printk("fis_nvme_start %u\n",k.pid);
+
+    //opcode check --> read = 0x02
+    if((cmd->rw).opcode != 0x02) return;
+
+    if(!tmp) return;
+    
+    struct bio_key bk = {0};
+    int ret = queue1.pop(&bk);
+    if(ret != 0) return;
+    
+    struct bio_val* tmp2 = bio_map.lookup(&bk);
+    if(tmp2){
+        ++(tmp2->cnt);
         ++(tmp->nvme_start);
+
+        struct nvme_key nk = {0};
+        struct nvme_val nv = {0};
+        nk.hmm = (cmd->rw).dptr.sgl.addr;
+        nk.pid = k.pid;
+        nv.time = t;
+        nvme_map.update(&nk,&nv);
     }
-    else return;
-    
-    bpf_trace_printk("nvme_ts %llu\n",t);
-    bpf_trace_printk("nvme_dbg %d\n",write_sq);
-    
 }
 
 void io_start(struct pt_regs *ctx)
@@ -308,7 +323,7 @@ void io_start(struct pt_regs *ctx)
         ++(tmp->sched_start);
     }
     else return;
-    bpf_trace_printk("sched_ts %llu\n",t);
+    //bpf_trace_printk("sched_ts %llu\n",t);
 
 }
 
@@ -324,5 +339,5 @@ void ret_io(struct pt_regs *ctx)
         ++(tmp->sched_fin);
     }
     else return;
-    bpf_trace_printk("sched_f_ts %llu\n",t);
+    //bpf_trace_printk("sched_f_ts %llu\n",t);
 }

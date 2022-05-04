@@ -1,3 +1,35 @@
+#pragma once
+#include <linux/acpi.h>
+#include <linux/aer.h>
+#include <linux/async.h>
+#include <linux/blkdev.h>
+#include <linux/blk-mq.h>
+#include <linux/blk-mq-pci.h>
+#include <linux/dmi.h>
+#include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/mutex.h>
+#include <linux/once.h>
+#include <linux/pci.h>
+#include <linux/suspend.h>
+#include <linux/t10-pi.h>
+#include <linux/types.h>
+#include <linux/io-64-nonatomic-lo-hi.h>
+#include <linux/io-64-nonatomic-hi-lo.h>
+#include <linux/sed-opal.h>
+#include <linux/pci-p2pdma.h>
+#include <uapi/linux/ptrace.h>
+#include <asm/types.h>
+#include <linux/fs.h>
+#include <linux/pagevec.h>
+#include <linux/blkdev.h>
+#include <linux/blk-mq.h>
+#include "./linux-5.13/drivers/nvme/host/trace.h"
+#include "./linux-5.13/drivers/nvme/host/nvme.h"
+
 /*
  * Represents an NVM Express device.  Each nvme_dev is a PCI function.
  */
