@@ -90,15 +90,10 @@ def breakdown():
         #print(st)
         tt = 0
         for j in range(cur,cur+val.cnt):
-            #print(j)
             val2 = map2[j][1]
-            #print(map2[j][0].hmm)
-            #print(val2.time/1000)
             x = ((val2.time/1000)-st)
-            #print(x)
             tt += ((val2.time/1000)-st)
         
-        #print(val.cnt)
         time_vals.append((tt/val.cnt))
         cur+=val.cnt
 
@@ -151,4 +146,7 @@ for i in range(len(event)):
         cnt+=1
 
 multi = cnt>1
-breakdown()
+if multi:
+    print("for muti processes, breakdown is not supported")
+else:
+    breakdown()
